@@ -2,9 +2,7 @@
 import logging
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Dict, Optional
-from .retry import RetryPolicy
-from .rabbitmq import RabbitMQProducer, RabbitMQConsumer
-from .kafka import KafkaProducer, KafkaConsumer
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -16,10 +14,6 @@ class BaseConnection(ABC):
         pass
 
     @abstractmethod
-    def disconnect(self):
-        pass
-
-    @abstractmethod
     def is_connected(self) -> bool:
         pass
 
@@ -28,31 +22,28 @@ class BaseProducer(BaseConnection):
     @abstractmethod
     def publish(self, message: Dict[str, Any], routing_key: Optional[str] = None):
         pass
-
+    
+    @abstractmethod
+    def declare_exchange(self, exchange_name: str, exchange_type: str = "topic", durable: bool = True, auto_delete: bool = False, internal: bool = False, passive: bool = False, headers: Dict = None, message_ttl: int = None):
+        pass
+    @abstractmethod
+    def declare_queue(self, queue_name: str, durable: bool = True, no_ack: bool = False, exclusive: bool = False, auto_delete: bool = False, arguments: Dict = None):
+        pass
+    @abstractmethod
+    def bind_queue(self, exchange_name: str, queue_name: str, routing_key: str = "#"):
+        pass
 
 class BaseConsumer(BaseConnection):
     @abstractmethod
-    def consume(self, callback: Callable[[Dict[str, Any]], None]):
+    def consume(self, callback: Callable[[Dict[str, Any]], None] ,queue_name: str = '', auto_ack: bool = True):
         pass
-
-
-class MessageBrokerFactory:
-    @staticmethod
-    def get_producer(
-        broker_type: str, config: Dict, retry_policy: RetryPolicy = RetryPolicy()
-    ):
-        if broker_type == "rabbitmq":
-            return RabbitMQProducer(config, retry_policy)
-        elif broker_type == "kafka":
-            return KafkaProducer(config, retry_policy)
-        raise ValueError("Unsupported broker type")
-
-    @staticmethod
-    def get_consumer(
-        broker_type: str, config: Dict, retry_policy: RetryPolicy = RetryPolicy()
-    ):
-        if broker_type == "rabbitmq":
-            return RabbitMQConsumer(config, retry_policy)
-        elif broker_type == "kafka":
-            return KafkaConsumer(config, retry_policy)
-        raise ValueError("Unsupported broker type")
+    
+    @abstractmethod
+    def declare_exchange(self, exchange_name: str, exchange_type: str = "topic", durable: bool = True, auto_delete: bool = False, internal: bool = False, passive: bool = False, headers: Dict = None, message_ttl: int = None):
+        pass
+    @abstractmethod
+    def declare_queue(self, queue_name: str, durable: bool = True, no_ack: bool = False, exclusive: bool = False, auto_delete: bool = False, arguments: Dict = None):
+        pass
+    @abstractmethod
+    def bind_queue(self, exchange_name: str, queue_name: str, routing_key: str = "#"):
+        pass

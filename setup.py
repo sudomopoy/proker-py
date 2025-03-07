@@ -23,5 +23,6 @@ setup(
     install_requires=[
         "pika>=1.1.0",
         "kafka-python>=2.0.2",
+        "protobuf>=6.30.0"
     ],
 )

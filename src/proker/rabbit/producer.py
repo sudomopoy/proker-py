@@ -1,36 +1,106 @@
-from urllib.parse import urlparse
-import os
+# messaging_broker/rabbitmq.py
 import pika
-import google.protobuf.message
-from google.protobuf import json_format
-from proker.producer import ProkerProducer
+from typing import Any, Dict, Optional
+from proker.retry import auto_reconnect
+from proker.core import BaseProducer
+from proker.retry import RetryPolicy
 
-class RabbitProducer(ProkerProducer):
-    def __init__(self, queue_name: str):
-        self.queue_name = queue_name
-        self.connect()
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+class RabbitMQProducer(BaseProducer):
+    def __init__(self, config: Dict, retry_policy: RetryPolicy):
+        super().__init__()
+        self.config = config
+        self.retry_policy = retry_policy
+        self.connection = None
+        self.channel = None
 
     def connect(self):
-        parsed_uri = urlparse(os.getenv('RABBITMQ_URI'))
-        connection_params = pika.ConnectionParameters(
-            host=parsed_uri.hostname,
-            port=parsed_uri.port,
-            credentials=pika.PlainCredentials(parsed_uri.username, parsed_uri.password),
-            heartbeat=60  # افزایش heartbeat
+        credentials = pika.PlainCredentials(
+            self.config.get("username", "guest"), self.config.get("password", "guest")
         )
-        self.connection = pika.BlockingConnection(connection_params)
+        self.connection = pika.BlockingConnection(
+            pika.ConnectionParameters(
+                host=self.config.get("host", "localhost"),
+                port=self.config.get("port", 5672),
+                credentials=credentials,
+                virtual_host=self.config.get("virtual_host", "/"),
+                heartbeat=self.config.get("heartbeat", 600),
+            )
+        )
         self.channel = self.connection.channel()
-        self.channel.queue_declare(queue=self.queue_name)
+        self._declare_infrastructure()
 
-    def publish(self, message: google.protobuf.message.Message):
+    def _declare_infrastructure(self):
+        exchange = self.config.get("exchange")
+        if exchange:
+            self.declare_exchange(
+                exchange_name=exchange["name"],
+                exchange_type=exchange.get("type", "topic"),
+                durable=exchange.get("durable", True),
+            )
+
+
+        queue = self.config.get("queue")
+        if queue:
+            self.declare_queue(
+                queue_name=queue["name"],
+                durable=queue.get("durable",True),
+            )
+            
+            if exchange:
+                self.bind_queue(
+                    exchange_name=exchange["name"],
+                    queue_name=queue["name"],
+                    routing_key=queue.get("routing_key", "#"),
+                )
+
+    def declare_exchange(self, exchange_name: str, exchange_type: str = "topic", durable: bool = True, auto_delete: bool = False, internal: bool = False, passive: bool = False, headers: Dict = None, message_ttl: int = None,  max_length_bytes: int = None):
+        self.channel.exchange_declare(
+            exchange=exchange_name,
+            exchange_type=exchange_type,
+            durable=durable,
+            auto_delete=auto_delete,
+            internal=internal,
+            passive=passive,
+        )
+    def declare_queue(self, queue_name: str, durable: bool = True, no_ack: bool = False, exclusive: bool = False, auto_delete: bool = False, arguments: Dict = None):
+        self.channel.queue_declare(
+            queue=queue_name, 
+            durable=durable,
+            exclusive=exclusive,
+            auto_delete=auto_delete,
+            arguments=arguments,
+        )
+    def bind_queue(self, exchange_name: str, queue_name: str, routing_key: str = "#"):
+        self.channel.queue_bind(
+            exchange=exchange_name,
+            queue=queue_name,
+            routing_key= routing_key,
+        )
+
+    @auto_reconnect
+    def publish(self, message: str | bytes, routing_key: Optional[str] = None):
         try:
-            serialized_message = message.SerializeToString()
-            self.channel.basic_publish(exchange='', routing_key=self.queue_name, body=serialized_message)
-            print(f"Sent: {json_format.MessageToJson(message)}")
+            exchange = self.config.get("exchange", {}).get("name", "")
+            self.channel.basic_publish(
+                exchange=exchange,
+                routing_key=routing_key or self.config.get("routing_key", ""),
+                body=message,
+                properties=pika.BasicProperties(delivery_mode=pika.DeliveryMode.Persistent),
+            )
         except pika.exceptions.AMQPConnectionError:
-            print("Connection lost, reconnecting...")
+            logger.error('amqp connection error')
             self.connect()
-            self.publish(message) 
-
-    def close(self):
-        self.connection.close()
+            self.publish(message, routing_key)
+            
+    def is_connected(self) -> bool:
+        try:
+            return bool(self.connection and self.connection.is_open 
+                     and self.channel and self.channel.is_open)
+        except Exception as e:
+            logger.debug(f"Connection check failed: {str(e)}")
+            return False

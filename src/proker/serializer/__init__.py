@@ -21,7 +21,9 @@ class JSONSerializer(BaseSerializer):
 
     def unmarshal(self, data: bytes) -> Any:
         return json.loads(data.decode("utf-8"))
-
+    
+    def unmarshal(self, data: str) -> Any:
+        return json.loads(data)
 
 class ProtobufSerializer(BaseSerializer):
     def __init__(self, proto_class: Type[Message]):
