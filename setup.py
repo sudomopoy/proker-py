@@ -20,5 +20,5 @@ setup(
         "https://pypi.org/project/pika/",
         "https://pypi.org/project/kafka-python/",
     ],
-    install_requires=["pika>=1.1.0", "kafka-python>=2.0.2", "protobuf>=6.30.0"],
+    install_requires=["pika>=1.1.0", "kafka-python>=2.0.2", "protobuf>=5.29.3"],
 )
