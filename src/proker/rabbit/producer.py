@@ -24,7 +24,7 @@ class RabbitMQProducer(BaseProducer):
             self.config.get("username", "guest"), self.config.get("password", "guest")
         )
         if self.config.get("uri", "#") != "#":
-            url_parameter = pika.URLParameters()
+            url_parameter = pika.URLParameters(self.config.get("uri"))
             self.connection = pika.BlockingConnection(url_parameter)
         else:
             self.connection = pika.BlockingConnection(
