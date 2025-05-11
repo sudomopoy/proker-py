@@ -8,7 +8,6 @@ from proker.serializer import BaseSerializer, JSONSerializer
 from proker.core import BaseConsumer
 from typing import Any, Callable, Dict, Optional
 import logging
-import time
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -32,15 +31,20 @@ class RabbitMQConsumer(BaseConsumer):
         credentials = pika.PlainCredentials(
             self.config.get("username", "guest"), self.config.get("password", "guest")
         )
-        self.connection = pika.BlockingConnection(
-            pika.ConnectionParameters(
-                host=self.config.get("host", "localhost"),
-                port=self.config.get("port", 5672),
-                credentials=credentials,
-                virtual_host=self.config.get("virtual_host", "/"),
-                heartbeat=self.config.get("heartbeat", 600),
+        if self.config.get("uri", "#") != "#":
+            url_parameter = pika.URLParameters()
+            self.connection = pika.BlockingConnection(url_parameter)
+        else:
+            self.connection = pika.BlockingConnection(
+                pika.ConnectionParameters(
+                    host=self.config.get("host", "localhost"),
+                    port=self.config.get("port", 5672),
+                    credentials=credentials,
+                    virtual_host=self.config.get("virtual_host", "/"),
+                    heartbeat=self.config.get("heartbeat", 600),
+                    ssl_options={},
+                )
             )
-        )
         self.channel = self.connection.channel()
         self._declare_infrastructure()
 
@@ -140,7 +144,7 @@ class RabbitMQConsumer(BaseConsumer):
                     properties.headers["x-retry-count"] += 1
                 else:
                     properties.headers["x-retry-count"] = 1
-                time.sleep(backoff_factor)
+                # time.sleep(backoff_factor)
                 # Nack the message and requeue it
                 channel.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
 
