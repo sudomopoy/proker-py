@@ -32,7 +32,7 @@ class RabbitMQConsumer(BaseConsumer):
             self.config.get("username", "guest"), self.config.get("password", "guest")
         )
         if self.config.get("uri", "#") != "#":
-            url_parameter = pika.URLParameters()
+            url_parameter = pika.URLParameters(self.config.get("uri"))
             self.connection = pika.BlockingConnection(url_parameter)
         else:
             self.connection = pika.BlockingConnection(
@@ -42,7 +42,6 @@ class RabbitMQConsumer(BaseConsumer):
                     credentials=credentials,
                     virtual_host=self.config.get("virtual_host", "/"),
                     heartbeat=self.config.get("heartbeat", 600),
-                    ssl_options={},
                 )
             )
         self.channel = self.connection.channel()
