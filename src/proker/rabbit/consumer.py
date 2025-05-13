@@ -59,7 +59,7 @@ class RabbitMQConsumer(BaseConsumer):
         self.channel.basic_consume(
             queue=queue,
             on_message_callback=lambda ch, method, properties, body: self._handle_message(
-                ch, method, properties, body, callback, backoff_factor
+                ch, method, properties, body, callback
             ),
             auto_ack=auto_ack or self.config.get("auto_ack", True),
         )
